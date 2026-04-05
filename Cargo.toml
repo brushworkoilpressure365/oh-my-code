@@ -1,0 +1,31 @@
+[package]
+name = "oh-my-code"
+version = "0.1.0"
+edition = "2021"
+description = "A Rust-native interactive terminal coding assistant"
+license = "Apache-2.0"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+rustyline = "14"
+anyhow = "1"
+grep-regex = "0.1"
+grep-searcher = "0.1"
+ignore = "0.4"
+syntect = "5"
+futures = "0.3"
+async-trait = "0.1"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "5"
+pin-project-lite = "0.2"
+glob = "0.3"
+urlencoding = "2"
+
+[dev-dependencies]
+tempfile = "3"
+tokio-test = "0.4"

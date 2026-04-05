@@ -1,0 +1,26 @@
+[default]
+provider = "claude"
+model = "claude-sonnet-4-20250514"
+
+[providers.claude]
+api_key_env = "ANTHROPIC_API_KEY"
+base_url = "https://api.anthropic.com"
+
+[providers.openai]
+api_key_env = "OPENAI_API_KEY"
+base_url = "https://api.openai.com"
+
+[providers.zhipu]
+api_key_env = "ZHIPU_API_KEY"
+base_url = "https://open.bigmodel.cn/api/paas/v4"
+
+[providers.minimax]
+api_key_env = "MINIMAX_API_KEY"
+base_url = "https://api.minimax.chat/v1"
+
+[search]
+ignore_patterns = ["node_modules", ".git", "dist", "build", "target"]
+max_results = 500
+
+[session]
+storage_dir = "~/.config/oh-my-code/sessions"
