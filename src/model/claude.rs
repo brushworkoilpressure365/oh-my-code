@@ -7,6 +7,7 @@ use serde_json::Value;
 
 use super::types::{ContentBlock, Message, ModelConfig, ModelInfo, Role, StreamEvent, ToolDef};
 use super::Provider;
+use crate::config::AuthStyle;
 
 // --- Wire types for Anthropic Messages API ---
 
@@ -71,14 +72,16 @@ struct SseContentBlock {
 pub struct ClaudeProvider {
     api_key: String,
     base_url: String,
+    auth_style: AuthStyle,
     client: Client,
 }
 
 impl ClaudeProvider {
-    pub fn new(api_key: String, base_url: String) -> Self {
+    pub fn new(api_key: String, base_url: String, auth_style: AuthStyle) -> Self {
         Self {
             api_key,
             base_url,
+            auth_style,
             client: Client::new(),
         }
     }
@@ -258,15 +261,19 @@ impl Provider for ClaudeProvider {
             stream: true,
         };
 
-        let response = self
+        let request = self
             .client
             .post(format!("{}/v1/messages", self.base_url))
-            .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")
-            .json(&request_body)
-            .send()
-            .await?;
+            .json(&request_body);
+
+        let request = match self.auth_style {
+            AuthStyle::XApiKey => request.header("x-api-key", &self.api_key),
+            AuthStyle::Bearer => request.bearer_auth(&self.api_key),
+        };
+
+        let response = request.send().await?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -419,5 +426,83 @@ mod tests {
         assert!(parse_sse_line("").is_none());
         assert!(parse_sse_line("   ").is_none());
         assert!(parse_sse_line("data: ").is_none());
+    }
+
+    #[tokio::test]
+    async fn claude_provider_sends_x_api_key_header_by_default() {
+        use wiremock::matchers::{header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/messages"))
+            .and(header("x-api-key", "sk-test-xapi"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                "data: {\"type\":\"message_stop\"}\n\n",
+            ))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let provider = ClaudeProvider::new(
+            "sk-test-xapi".to_string(),
+            server.uri(),
+            crate::config::AuthStyle::XApiKey,
+        );
+
+        let messages = vec![Message::user("hi")];
+        let tools: Vec<ToolDef> = vec![];
+        let config = ModelConfig {
+            model_id: "claude-test".to_string(),
+            max_tokens: 16,
+            temperature: 0.0,
+        };
+
+        let mut stream = provider
+            .send_message(&messages, &tools, &config)
+            .await
+            .expect("send_message should succeed");
+
+        while stream.next().await.is_some() {}
+        // MockServer verifies .expect(1) on drop; if the x-api-key matcher didn't fire,
+        // the test fails here.
+    }
+
+    #[tokio::test]
+    async fn claude_provider_sends_bearer_header_when_auth_style_bearer() {
+        use wiremock::matchers::{header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/messages"))
+            .and(header("authorization", "Bearer sk-test-bearer"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                "data: {\"type\":\"message_stop\"}\n\n",
+            ))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let provider = ClaudeProvider::new(
+            "sk-test-bearer".to_string(),
+            server.uri(),
+            crate::config::AuthStyle::Bearer,
+        );
+
+        let messages = vec![Message::user("hi")];
+        let tools: Vec<ToolDef> = vec![];
+        let config = ModelConfig {
+            model_id: "minimax-m2.7".to_string(),
+            max_tokens: 16,
+            temperature: 0.0,
+        };
+
+        let mut stream = provider
+            .send_message(&messages, &tools, &config)
+            .await
+            .expect("send_message should succeed");
+
+        while stream.next().await.is_some() {}
     }
 }

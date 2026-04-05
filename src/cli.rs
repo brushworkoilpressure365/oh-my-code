@@ -25,7 +25,8 @@ impl Repl {
         let provider_name = config.default.provider.clone();
         let base_url = provider_config.base_url.clone();
 
-        let provider = model::create_provider(&provider_name, api_key, base_url)?;
+        let auth_style = provider_config.auth_style;
+        let provider = model::create_provider(&provider_name, api_key, base_url, auth_style)?;
 
         let model_config = ModelConfig {
             model_id: config.default.model.clone(),
