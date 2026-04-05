@@ -505,4 +505,60 @@ mod tests {
 
         while stream.next().await.is_some() {}
     }
+
+    #[tokio::test]
+    async fn live_minimax_anthropic_roundtrip() {
+        // Opt-in: this test hits a real network endpoint. Skip silently unless the
+        // user explicitly asked for live tests via OH_MY_CODE_LIVE_TESTS=1.
+        if std::env::var("OH_MY_CODE_LIVE_TESTS").ok().as_deref() != Some("1") {
+            return;
+        }
+
+        let token = std::env::var("ANTHROPIC_AUTH_TOKEN")
+            .expect("ANTHROPIC_AUTH_TOKEN must be set when OH_MY_CODE_LIVE_TESTS=1");
+        let base_url = std::env::var("ANTHROPIC_BASE_URL")
+            .unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string());
+        let model = std::env::var("ANTHROPIC_MODEL")
+            .unwrap_or_else(|_| "MiniMax-M2.7-highspeed".to_string());
+
+        let provider = ClaudeProvider::new(token, base_url, crate::config::AuthStyle::Bearer);
+
+        let messages = vec![Message::user("Reply with exactly the word: pong")];
+        let tools: Vec<ToolDef> = vec![];
+        let config = ModelConfig {
+            model_id: model,
+            max_tokens: 64,
+            temperature: 0.0,
+        };
+
+        let mut stream = provider
+            .send_message(&messages, &tools, &config)
+            .await
+            .expect("provider send_message failed");
+
+        let mut accumulated = String::new();
+        let mut saw_delta = false;
+        let mut saw_end = false;
+        while let Some(event) = stream.next().await {
+            match event {
+                StreamEvent::Delta { text } => {
+                    saw_delta = true;
+                    accumulated.push_str(&text);
+                }
+                StreamEvent::MessageEnd => {
+                    saw_end = true;
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        assert!(saw_delta, "expected at least one Delta event");
+        assert!(
+            !accumulated.trim().is_empty(),
+            "expected non-empty accumulated text"
+        );
+        assert!(saw_end, "expected MessageEnd event");
+        eprintln!("live response: {:?}", accumulated);
+    }
 }
