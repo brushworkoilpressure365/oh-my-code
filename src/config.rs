@@ -111,6 +111,14 @@ impl AppConfig {
                 auth_style: AuthStyle::XApiKey,
             },
         );
+        providers.insert(
+            "minimax-anthropic".to_string(),
+            ProviderConfig {
+                api_key_env: "ANTHROPIC_AUTH_TOKEN".to_string(),
+                base_url: "https://api.minimaxi.com/anthropic".to_string(),
+                auth_style: AuthStyle::Bearer,
+            },
+        );
 
         AppConfig {
             default: DefaultConfig {
@@ -171,8 +179,16 @@ mod tests {
         let content = include_str!("../config/default.toml");
         let config = AppConfig::load_from_str(content).expect("Should parse default.toml");
         assert_eq!(config.default.provider, "claude");
-        assert_eq!(config.providers.len(), 4);
+        assert_eq!(config.providers.len(), 5);
         assert_eq!(config.search.ignore_patterns.len(), 5);
+
+        let mma = config
+            .providers
+            .get("minimax-anthropic")
+            .expect("minimax-anthropic provider must be present");
+        assert_eq!(mma.api_key_env, "ANTHROPIC_AUTH_TOKEN");
+        assert_eq!(mma.base_url, "https://api.minimaxi.com/anthropic");
+        assert_eq!(mma.auth_style, AuthStyle::Bearer);
     }
 
     #[test]
