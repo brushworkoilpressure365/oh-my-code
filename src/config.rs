@@ -17,10 +17,20 @@ pub struct DefaultConfig {
     pub model: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuthStyle {
+    #[default]
+    XApiKey,
+    Bearer,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderConfig {
     pub api_key_env: String,
     pub base_url: String,
+    #[serde(default)]
+    pub auth_style: AuthStyle,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,6 +84,7 @@ impl AppConfig {
             ProviderConfig {
                 api_key_env: "ANTHROPIC_API_KEY".to_string(),
                 base_url: "https://api.anthropic.com".to_string(),
+                auth_style: AuthStyle::XApiKey,
             },
         );
         providers.insert(
@@ -81,6 +92,7 @@ impl AppConfig {
             ProviderConfig {
                 api_key_env: "OPENAI_API_KEY".to_string(),
                 base_url: "https://api.openai.com".to_string(),
+                auth_style: AuthStyle::XApiKey,
             },
         );
         providers.insert(
@@ -88,6 +100,7 @@ impl AppConfig {
             ProviderConfig {
                 api_key_env: "ZHIPU_API_KEY".to_string(),
                 base_url: "https://open.bigmodel.cn/api/paas/v4".to_string(),
+                auth_style: AuthStyle::XApiKey,
             },
         );
         providers.insert(
@@ -95,6 +108,7 @@ impl AppConfig {
             ProviderConfig {
                 api_key_env: "MINIMAX_API_KEY".to_string(),
                 base_url: "https://api.minimax.chat/v1".to_string(),
+                auth_style: AuthStyle::XApiKey,
             },
         );
 
@@ -201,5 +215,53 @@ mod tests {
             config.search.ignore_patterns
         );
         assert_eq!(deserialized.session.storage_dir, config.session.storage_dir);
+    }
+
+    #[test]
+    fn test_provider_config_auth_style_defaults_to_x_api_key() {
+        // Legacy TOML without auth_style must still parse; default is XApiKey.
+        let content = r#"
+[default]
+provider = "claude"
+model = "claude-sonnet-4-20250514"
+
+[providers.claude]
+api_key_env = "ANTHROPIC_API_KEY"
+base_url = "https://api.anthropic.com"
+
+[search]
+ignore_patterns = []
+max_results = 100
+
+[session]
+storage_dir = "/tmp"
+"#;
+        let config = AppConfig::load_from_str(content).expect("Should parse");
+        let p = config.providers.get("claude").expect("claude provider");
+        assert_eq!(p.auth_style, AuthStyle::XApiKey);
+    }
+
+    #[test]
+    fn test_provider_config_auth_style_bearer() {
+        let content = r#"
+[default]
+provider = "x"
+model = "y"
+
+[providers.x]
+api_key_env = "TOK"
+base_url = "https://example.com"
+auth_style = "bearer"
+
+[search]
+ignore_patterns = []
+max_results = 100
+
+[session]
+storage_dir = "/tmp"
+"#;
+        let config = AppConfig::load_from_str(content).expect("Should parse");
+        let p = config.providers.get("x").expect("x provider");
+        assert_eq!(p.auth_style, AuthStyle::Bearer);
     }
 }
