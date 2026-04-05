@@ -40,11 +40,13 @@ pub(crate) struct DetectedBackend {
 ///
 /// Rules (first match wins):
 ///   1. Host is `api.anthropic.com` (case-insensitive) → claude + XApiKey
-///   2. URL path contains `/anthropic` (case-insensitive) → minimax-anthropic + Bearer
+///   2. Host is present AND path contains `/anthropic` (case-insensitive) →
+///      minimax-anthropic + Bearer
 ///   3. Otherwise → openai + Bearer
 ///
-/// Malformed URLs fall through to rule 3; the subsequent HTTP request will
-/// fail cleanly via the adapter's normal error path.
+/// URLs that fail to parse, or parse successfully but have no host (e.g.
+/// `file://`), fall through to rule 3. The resulting HTTP request — if any —
+/// will fail cleanly via the adapter's normal error path.
 pub(crate) fn detect_backend(base_url: &str) -> DetectedBackend {
     if let Ok(parsed) = url::Url::parse(base_url) {
         if let Some(host) = parsed.host_str() {
@@ -67,6 +69,62 @@ pub(crate) fn detect_backend(base_url: &str) -> DetectedBackend {
         routing_name: "openai",
         auth_style: AuthStyle::Bearer,
     }
+}
+
+/// Read `API_KEY`, `BASE_URL`, and `MODEL` from the environment. If all three
+/// are set and non-empty, synthesize an in-memory provider entry named `"env"`
+/// into `cfg.providers`, set `cfg.default.provider = "env"`, and set
+/// `cfg.default.model` from `MODEL`. If any one is missing or empty, leave
+/// `cfg` untouched.
+///
+/// This is the env-quick-start layer documented in
+/// `docs/superpowers/specs/2026-04-05-env-quick-start-design.md`. It runs after
+/// config.toml has been loaded so it strictly overrides TOML when active.
+pub(crate) fn apply_env_quick_start(cfg: &mut AppConfig) {
+    // Trim + empty check: whitespace-only values are treated as unset. A user
+    // who typed `API_KEY=   ` in .env almost certainly meant "not set".
+    let read = |name: &str| -> Option<String> {
+        std::env::var(name).ok().filter(|s| !s.trim().is_empty())
+    };
+    let api_key = read("API_KEY");
+    let base_url = read("BASE_URL");
+    let model = read("MODEL");
+
+    let (Some(_api_key), Some(base_url), Some(model)) = (api_key, base_url, model) else {
+        // Partial config is almost certainly a user mistake. Warn loudly so
+        // they know why their quick-start setup isn't taking effect.
+        let missing: Vec<&str> = [
+            ("API_KEY", std::env::var("API_KEY").ok().filter(|s| !s.trim().is_empty()).is_some()),
+            ("BASE_URL", std::env::var("BASE_URL").ok().filter(|s| !s.trim().is_empty()).is_some()),
+            ("MODEL", std::env::var("MODEL").ok().filter(|s| !s.trim().is_empty()).is_some()),
+        ]
+        .iter()
+        .filter_map(|(name, set)| if *set { None } else { Some(*name) })
+        .collect();
+        let set_count = 3 - missing.len();
+        if set_count > 0 {
+            eprintln!(
+                "oh-my-code: env quick-start inactive — all three of API_KEY, BASE_URL, \
+                 and MODEL must be set (got {}/3, missing: {}). Falling back to config.toml.",
+                set_count,
+                missing.join(", "),
+            );
+        }
+        return;
+    };
+
+    let backend = detect_backend(&base_url);
+    cfg.providers.insert(
+        "env".to_string(),
+        ProviderConfig {
+            api_key_env: "API_KEY".to_string(),
+            base_url,
+            auth_style: backend.auth_style,
+            routing_name: Some(backend.routing_name.to_string()),
+        },
+    );
+    cfg.default.provider = "env".to_string();
+    cfg.default.model = model;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,10 +165,10 @@ impl AppConfig {
 
     pub fn load() -> Result<Self> {
         let path = Self::config_path()?;
-        if path.exists() {
+        let mut config = if path.exists() {
             let content = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read config file at {}", path.display()))?;
-            Self::load_from_str(&content)
+            Self::load_from_str(&content)?
         } else {
             let config = Self::default_config();
             let dir = Self::config_dir()?;
@@ -120,8 +178,12 @@ impl AppConfig {
                 .context("Failed to serialize default config")?;
             std::fs::write(&path, &content)
                 .with_context(|| format!("Failed to write default config to {}", path.display()))?;
-            Ok(config)
-        }
+            config
+        };
+
+        apply_env_quick_start(&mut config);
+
+        Ok(config)
     }
 
     pub fn load_from_str(content: &str) -> Result<Self> {
@@ -400,5 +462,184 @@ storage_dir = "/tmp"
                 name
             );
         }
+    }
+
+    use std::sync::Mutex;
+
+    // Single mutex guards every test that mutates env vars. `cargo test` runs
+    // tests in parallel by default; without this lock, two env-mutating tests
+    // would trample each other.
+    static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn with_env_vars<F: FnOnce()>(vars: &[(&str, Option<&str>)], test: F) {
+        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        let saved: Vec<(String, Option<String>)> = vars
+            .iter()
+            .map(|(k, _)| (k.to_string(), std::env::var(k).ok()))
+            .collect();
+        for (k, v) in vars {
+            match v {
+                Some(val) => std::env::set_var(k, val),
+                None => std::env::remove_var(k),
+            }
+        }
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(test));
+        for (k, v) in saved {
+            match v {
+                Some(val) => std::env::set_var(&k, val),
+                None => std::env::remove_var(&k),
+            }
+        }
+        if let Err(payload) = result {
+            std::panic::resume_unwind(payload);
+        }
+    }
+
+    #[test]
+    fn env_quick_start_all_three_set_activates_synthetic_provider_anthropic() {
+        with_env_vars(
+            &[
+                ("API_KEY", Some("sk-ant-test-xyz")),
+                ("BASE_URL", Some("https://api.anthropic.com")),
+                ("MODEL", Some("claude-sonnet-4-5")),
+            ],
+            || {
+                let mut cfg = AppConfig::default_config();
+                apply_env_quick_start(&mut cfg);
+
+                assert_eq!(cfg.default.provider, "env");
+                assert_eq!(cfg.default.model, "claude-sonnet-4-5");
+                let env_provider = cfg.providers.get("env").expect("env provider must be synthesized");
+                assert_eq!(env_provider.api_key_env, "API_KEY");
+                assert_eq!(env_provider.base_url, "https://api.anthropic.com");
+                assert_eq!(env_provider.auth_style, AuthStyle::XApiKey);
+                assert_eq!(env_provider.routing_name.as_deref(), Some("claude"));
+            },
+        );
+    }
+
+    #[test]
+    fn env_quick_start_minimax_anthropic_url_uses_bearer_and_minimax_anthropic_routing() {
+        with_env_vars(
+            &[
+                ("API_KEY", Some("sk-cp-test-abc")),
+                ("BASE_URL", Some("https://api.minimaxi.com/anthropic")),
+                ("MODEL", Some("MiniMax-M2.7-highspeed")),
+            ],
+            || {
+                let mut cfg = AppConfig::default_config();
+                apply_env_quick_start(&mut cfg);
+
+                assert_eq!(cfg.default.provider, "env");
+                assert_eq!(cfg.default.model, "MiniMax-M2.7-highspeed");
+                let env_provider = cfg.providers.get("env").unwrap();
+                assert_eq!(env_provider.auth_style, AuthStyle::Bearer);
+                assert_eq!(env_provider.routing_name.as_deref(), Some("minimax-anthropic"));
+            },
+        );
+    }
+
+    #[test]
+    fn env_quick_start_openai_url_uses_bearer_and_openai_routing() {
+        with_env_vars(
+            &[
+                ("API_KEY", Some("sk-test")),
+                ("BASE_URL", Some("https://api.openai.com")),
+                ("MODEL", Some("gpt-4o")),
+            ],
+            || {
+                let mut cfg = AppConfig::default_config();
+                apply_env_quick_start(&mut cfg);
+
+                assert_eq!(cfg.default.provider, "env");
+                let env_provider = cfg.providers.get("env").unwrap();
+                assert_eq!(env_provider.auth_style, AuthStyle::Bearer);
+                assert_eq!(env_provider.routing_name.as_deref(), Some("openai"));
+            },
+        );
+    }
+
+    #[test]
+    fn env_quick_start_none_set_leaves_config_untouched() {
+        with_env_vars(
+            &[
+                ("API_KEY", None),
+                ("BASE_URL", None),
+                ("MODEL", None),
+            ],
+            || {
+                let mut cfg = AppConfig::default_config();
+                let original_provider = cfg.default.provider.clone();
+                let original_model = cfg.default.model.clone();
+                let original_provider_count = cfg.providers.len();
+
+                apply_env_quick_start(&mut cfg);
+
+                assert_eq!(cfg.default.provider, original_provider);
+                assert_eq!(cfg.default.model, original_model);
+                assert_eq!(cfg.providers.len(), original_provider_count);
+                assert!(!cfg.providers.contains_key("env"));
+            },
+        );
+    }
+
+    #[test]
+    fn env_quick_start_partial_set_leaves_config_untouched() {
+        with_env_vars(
+            &[
+                ("API_KEY", Some("sk-test")),
+                ("BASE_URL", Some("https://api.openai.com")),
+                ("MODEL", None),
+            ],
+            || {
+                let mut cfg = AppConfig::default_config();
+                let original_provider = cfg.default.provider.clone();
+                apply_env_quick_start(&mut cfg);
+                assert_eq!(cfg.default.provider, original_provider);
+                assert!(!cfg.providers.contains_key("env"));
+            },
+        );
+    }
+
+    #[test]
+    fn env_quick_start_whitespace_only_vars_treated_as_unset() {
+        with_env_vars(
+            &[
+                ("API_KEY", Some("   ")),
+                ("BASE_URL", Some("\t\t")),
+                ("MODEL", Some("  \n  ")),
+            ],
+            || {
+                let mut cfg = AppConfig::default_config();
+                let original_provider = cfg.default.provider.clone();
+                apply_env_quick_start(&mut cfg);
+                assert_eq!(
+                    cfg.default.provider, original_provider,
+                    "whitespace-only env vars should not trigger synthesis"
+                );
+                assert!(!cfg.providers.contains_key("env"));
+            },
+        );
+    }
+
+    #[test]
+    fn env_quick_start_empty_string_vars_treated_as_unset() {
+        with_env_vars(
+            &[
+                ("API_KEY", Some("")),
+                ("BASE_URL", Some("https://api.openai.com")),
+                ("MODEL", Some("gpt-4o")),
+            ],
+            || {
+                let mut cfg = AppConfig::default_config();
+                let original_provider = cfg.default.provider.clone();
+                apply_env_quick_start(&mut cfg);
+                assert_eq!(
+                    cfg.default.provider, original_provider,
+                    "empty API_KEY should not trigger synthesis"
+                );
+                assert!(!cfg.providers.contains_key("env"));
+            },
+        );
     }
 }
